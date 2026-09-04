@@ -302,6 +302,34 @@ A reader encountering a `status` the binding's declaration marks `unreachable` o
 | `finality`     | `string` | Optional | REQUIRED on `pending` and on terminal states whose `kind` is not `none`: the binding-defined basis on which the anchor is treated as irreversible (e.g. `finalized`, `confirmations:<n>`), or `unconfirmed` on `pending` where no receipt has been observed. |
 | `absentReason` | `string` | Required | A non-empty line stating why no anchor exists when `kind` is `none`; explicit `null` otherwise.                                           |
 
+**5.3.5 Receiver Obligation**
+
+A receiver — a resource server, or any party that dispatched a settle and is deciding whether to challenge again — that holds a `SettleResponse` for an authorization `A`:
+
+- MUST NOT issue a new payment challenge for the same intent while `A` is in a non-terminal state (`pending`, `deferred_until`, `blocked`), or while the outcome of a dispatched settle for `A` cannot be resolved (no response, transport failure, or a response whose `status` is malformed per §5.3.3.1).
+- MUST, on a subsequent request for the same intent, re-present `A` itself (same `about`) to the facilitator, or resolve `A` against its `statusAnchor`, before any decision to challenge.
+- MAY issue a new challenge only after `A` reaches a terminal state that is not `settled` (`canceled`, `expired`), or after a read of the anchor establishes that `A` did not and cannot settle under the binding's finality rule.
+
+**Failure to resolve, receiver side.** Symmetric with the emitter rule in §5.3.3: a receiver that cannot establish `A`'s state MUST treat it as unresolved. It MUST NOT treat the absence of a `SettleResponse`, an empty `transaction`, or a transport failure as evidence that `A` did not settle.
+
+This obligation is unconditional on client behaviour. A conforming client will re-present the same authorization; a non-conforming one will re-sign. The receiver's duty is identical in both cases, because the receiver holds `about` and the anchor and is the only party positioned to resolve them. Client-side idempotency does not discharge it: every client-side mitigation is bounded by process lifetime, and a lost reply is frequently caused by the exit of the process that held the key.
+
+**5.3.6 Conformance**
+
+A scheme/network binding that declares any state `reachable` under §5.3.3.1, and any receiver implementation that claims to honour §5.3.5, SHOULD demonstrate conformance against a battery that drives the implementation through, at minimum, these ambiguous outcomes:
+
+1. a settle is accepted, then the response is lost past the client's timeout;
+2. a settle succeeds on-chain, then a 5xx is returned;
+3. a challenge is re-issued for an authorization already presented;
+4. a slow but eventually successful answer;
+5. the reconciliation read itself fails — the "cannot establish" case of §5.3.3;
+6. a party declares itself safe — a claim, to be checked, not trusted;
+7. a clean run.
+
+For each outcome the battery MUST count settlements actually recorded — on-chain transfers, or facilitator-side settlement records — and MUST NOT judge by response-body equality. Two identical responses are not evidence of one settlement; two distinct anchors are evidence of two.
+
+A conformance claim MUST name the battery used, and MUST be accompanied by a mutation control: evidence that the same battery, run against an implementation known to violate §5.3.5, produces a failing result. A battery that cannot fail cannot pass. A self-administered pass reported without a control is a declaration, not a verification, and MUST NOT be represented as conformance.
+
 **5.4 VerifyResponse Schema**
 
 
